@@ -1,0 +1,21 @@
+#!/bin/bash
+set -euxo pipefail
+
+echo "Starting disk expansion"
+
+lsblk
+
+growpart /dev/nvme0n1 ${partition_number}
+
+partprobe /dev/nvme0n1
+udevadm settle
+
+pvresize /dev/nvme0n1p${partition_number}
+
+vgs
+
+lvextend -r -l +100%FREE /dev/mapper/RootVG-varVol
+
+df -h /var
+
+echo "Completed successfully"
