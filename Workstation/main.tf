@@ -2,10 +2,13 @@ resource "aws_instance" "workstation" {
   ami                    = var.ami_id
   instance_type          = var.instance_type
   vpc_security_group_ids = [aws_security_group.kubernetes.id]
-  iam_instance_profile = aws_iam_instance_profile.kubernetes.name
+ # iam_instance_profile = aws_iam_instance_profile.kubernetes.name
   user_data = templatefile("${path.module}/user.sh.tftpl", {
     partition_number = 4
     extend_size = 30
+    aws_access_key   = var.aws_access_key
+    aws_secret_key   = var.aws_secret_key
+    aws_region           = "us-east-1"
   })
   root_block_device {
     volume_size = 50
@@ -17,25 +20,38 @@ resource "aws_instance" "workstation" {
     Name = "workstation"
   }
 }
-  #  provisioner "remote-exec" {
+resource "terraform_data" "cluster" {
+
+  # depends_on = [
+  #   aws_iam_role_policy_attachment.kubernetes
+  # ]
+
+  triggers_replace = aws_instance.workstation.id
+
+  input = {
+    public_ip = aws_instance.workstation.public_ip
+  }
+
+  connection {
+    type     = "ssh"
+    host     = self.input.public_ip
+    user     = "ec2-user"
+    password = "DevOps321"
+    timeout  = "5m"
+  }
+
+  provisioner "remote-exec" {
+  when = destroy
+
+  inline = [
     
-   
+    #"/usr/local/bin/eksctl delete cluster --name roboshop-devops --region us-east-1 --wait || true",
 
-  #  }
-  
-  #    connection {
-  #     type        = "ssh"
-  #     host        = self.public_ip
-  #     user        = "ec2-user"
-  #     password = "DevOps321"
-  #     timeout     = "5m"
-  #   }
-
-  #    tags = var.ec2_tags
-  # }
-
-
-
+    #"aws cloudformation delete-stack --stack-name eksctl-roboshop-devops-cluster --deletion-mode FORCE_DELETE_STACK || true"
+    "eksctl delete cluster -f /home/ec2-user/eksctl-cluster-creation/eksctl.yaml --wait"
+  ]
+}
+}
 
 resource "aws_security_group" "kubernetes" {
   name        = var.sg_name
@@ -68,8 +84,6 @@ resource "aws_security_group" "kubernetes" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
-
 
 
   tags = var.ec2_tags
